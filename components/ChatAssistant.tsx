@@ -8,6 +8,7 @@ import {
   reactionAnimationSchema,
   type ReactionAnimationId,
 } from "@/lib/character-animations";
+import { useSunnyVoice } from "@/lib/use-sunny-voice";
 
 export function ChatAssistant() {
   const [messages, setMessages] = useState<ChatLine[]>([]);
@@ -17,11 +18,14 @@ export function ChatAssistant() {
   const [reactionSeq, setReactionSeq] = useState(0);
   const [reactionAnimation, setReactionAnimation] =
     useState<ReactionAnimationId | null>(null);
+  const { supported: voiceSupported, enabled: voiceEnabled, setEnabled: setVoiceEnabled, speak, cancel: cancelVoice } =
+    useSunnyVoice();
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
 
+    cancelVoice();
     setError(null);
     const nextUser: ChatLine = { role: "user", content: trimmed };
     const historyForApi = [...messages, nextUser];
@@ -77,6 +81,7 @@ export function ChatAssistant() {
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
       setReactionAnimation(animParsed.data);
       setReactionSeq((n) => n + 1);
+      speak(reply);
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";
@@ -85,7 +90,7 @@ export function ChatAssistant() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages]);
+  }, [cancelVoice, input, loading, messages, speak]);
 
   const onKeyDown = (ev: KeyboardEvent<HTMLTextAreaElement>) => {
     if (ev.key === "Enter" && !ev.shiftKey) {
@@ -102,7 +107,29 @@ export function ChatAssistant() {
       />
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-[max(11rem,env(safe-area-inset-bottom))] pt-6 md:gap-8 md:px-8 md:pb-[max(12rem,env(safe-area-inset-bottom))] md:pt-8">
         <div className="flex min-h-0 flex-1 flex-col gap-4">
-          <ChatThread messages={messages} />
+          {voiceSupported ? (
+            <div className="flex items-center justify-end gap-2">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={voiceEnabled}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setVoiceEnabled(on);
+                    if (!on) cancelVoice();
+                  }}
+                  className="h-3.5 w-3.5 rounded border-zinc-300 text-amber-600 focus:ring-amber-500/30 dark:border-zinc-600"
+                />
+                Voz da Sunny (Web Speech)
+              </label>
+            </div>
+          ) : null}
+          <ChatThread
+            messages={messages}
+            voiceSupported={voiceSupported}
+            voiceEnabled={voiceEnabled}
+            onSpeakAssistant={voiceSupported ? speak : undefined}
+          />
           {error ? (
             <p
               className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
