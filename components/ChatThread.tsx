@@ -9,8 +9,7 @@ export function ChatThread({ messages }: ChatThreadProps) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-16 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400">
         <p className="max-w-sm text-sm leading-relaxed">
-          Say hello — Sunny will answer here after the model returns JSON from the
-          server.
+          Diga oi — a Sunny responde aqui quando você enviar uma mensagem.
         </p>
       </div>
     );
@@ -31,7 +30,7 @@ export function ChatThread({ messages }: ChatThreadProps) {
             }
           >
             <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider opacity-60">
-              {m.role === "user" ? "You" : "Sunny"}
+              {m.role === "user" ? "Você" : "Sunny"}
             </span>
             <p className="whitespace-pre-wrap">{m.content}</p>
           </div>

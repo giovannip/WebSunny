@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { reactionAnimationSchema } from "@/lib/character-animations";
 import {
   CHARACTER_SYSTEM_PROMPT,
   createGroqClient,
@@ -23,6 +24,7 @@ const requestSchema = z
 
 const groqReplySchema = z.object({
   reply: z.string().min(1),
+  animation: reactionAnimationSchema,
 });
 
 export async function POST(req: Request) {
@@ -98,7 +100,10 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ reply: replyParsed.data.reply });
+    return NextResponse.json({
+      reply: replyParsed.data.reply,
+      animation: replyParsed.data.animation,
+    });
   } catch (e) {
     const messageText =
       e instanceof Error ? e.message : "Groq request failed";
