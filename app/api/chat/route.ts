@@ -22,9 +22,20 @@ const requestSchema = z
     message: "Provide either `message` or non-empty `messages`.",
   });
 
+/** Normalized BCP-47-like tag for TTS (lowercase, hyphen). */
+const replyLanguageSchema = z
+  .string()
+  .min(1)
+  .max(32)
+  .transform((s) => s.trim().replace(/_/g, "-").toLowerCase())
+  .refine((s) => /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/.test(s), {
+    message: "Invalid replyLanguage tag",
+  });
+
 const groqReplySchema = z.object({
   reply: z.string().min(1),
   animation: reactionAnimationSchema,
+  replyLanguage: replyLanguageSchema,
 });
 
 export async function POST(req: Request) {
@@ -103,6 +114,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       reply: replyParsed.data.reply,
       animation: replyParsed.data.animation,
+      replyLanguage: replyParsed.data.replyLanguage,
     });
   } catch (e) {
     const messageText =

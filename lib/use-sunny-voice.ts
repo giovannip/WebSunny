@@ -69,15 +69,6 @@ function matchesHints(haystack: string, hints: readonly string[]): boolean {
   return hints.some((h) => haystack.includes(h));
 }
 
-function isPtBrLang(lang: string): boolean {
-  return normalizeLangTag(lang).startsWith("pt-br");
-}
-
-function isPortugueseLang(lang: string): boolean {
-  const n = normalizeLangTag(lang);
-  return n === "pt" || n.startsWith("pt-");
-}
-
 /** Prefer feminine-sounding local voices; avoid clearly male ones when possible. */
 function pickFromCandidates(
   candidates: SpeechSynthesisVoice[],
@@ -94,21 +85,38 @@ function pickFromCandidates(
   return candidates[0];
 }
 
-function pickPortugueseVoice(
+/** Match installed voices to the LLM-declared BCP-47-like tag (already normalized). */
+function pickVoiceForLanguage(
   voices: SpeechSynthesisVoice[],
+  langTag: string,
 ): SpeechSynthesisVoice | null {
-  const ptBr = voices.filter((v) => isPtBrLang(v.lang));
-  const fromBr = pickFromCandidates(ptBr);
-  if (fromBr) return fromBr;
+  if (voices.length === 0) return null;
+  const want = normalizeLangTag(langTag.trim());
+  if (!want) return voices.find((v) => v.default) ?? voices[0] ?? null;
+  const primary = want.split("-")[0] ?? want;
 
-  const ptNonBr = voices.filter(
-    (v) => isPortugueseLang(v.lang) && !isPtBrLang(v.lang),
+  const exact = voices.filter((v) => normalizeLangTag(v.lang) === want);
+  const fromExact = pickFromCandidates(exact);
+  if (fromExact) return fromExact;
+
+  const extended = voices.filter((v) =>
+    normalizeLangTag(v.lang).startsWith(`${want}-`),
   );
-  const fromPt = pickFromCandidates(ptNonBr);
-  if (fromPt) return fromPt;
+  const fromExtended = pickFromCandidates(extended);
+  if (fromExtended) return fromExtended;
 
-  const anyPt = voices.filter((v) => isPortugueseLang(v.lang));
-  return pickFromCandidates(anyPt) ?? voices[0] ?? null;
+  const samePrimary = voices.filter((v) => {
+    const nl = normalizeLangTag(v.lang);
+    return nl === primary || nl.startsWith(`${primary}-`);
+  });
+  const fromPrimary = pickFromCandidates(samePrimary);
+  if (fromPrimary) return fromPrimary;
+
+  return voices.find((v) => v.default) ?? voices[0] ?? null;
+}
+
+export function normalizeUtteranceLangTag(langTag: string): string {
+  return normalizeLangTag(langTag.trim()) || "pt-br";
 }
 
 function whenVoicesReady(
@@ -186,13 +194,14 @@ export function useSunnyVoice() {
   }, []);
 
   const speak = useCallback(
-    (text: string) => {
+    (text: string, langTag: string) => {
       const trimmed = text.trim();
       if (!trimmed || !enabled) return;
       if (typeof window === "undefined" || !("speechSynthesis" in window)) {
         return;
       }
 
+      const lang = normalizeUtteranceLangTag(langTag);
       const synth = window.speechSynthesis;
       const gen = ++speakGen.current;
       synth.cancel();
@@ -201,8 +210,8 @@ export function useSunnyVoice() {
         () => {
           if (!mounted.current || gen !== speakGen.current) return;
           const utter = new SpeechSynthesisUtterance(trimmed);
-          utter.lang = "pt-BR";
-          const voice = pickPortugueseVoice(synth.getVoices());
+          utter.lang = lang;
+          const voice = pickVoiceForLanguage(synth.getVoices(), lang);
           if (voice) utter.voice = voice;
           utter.rate = 1.02;
           utter.pitch = 1.06;

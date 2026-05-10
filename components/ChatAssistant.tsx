@@ -33,11 +33,16 @@ export function ChatAssistant() {
     setInput("");
     setLoading(true);
 
+    const messagesPayload = historyForApi.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: historyForApi }),
+        body: JSON.stringify({ messages: messagesPayload }),
       });
 
       const data: unknown = await res.json().catch(() => ({}));
@@ -69,8 +74,18 @@ export function ChatAssistant() {
           ? (data as { animation: string }).animation
           : null;
 
-      if (!reply || !animation) {
-        throw new Error("Resposta JSON incompleta (reply ou animation)");
+      const replyLanguage =
+        typeof data === "object" &&
+        data !== null &&
+        "replyLanguage" in data &&
+        typeof (data as { replyLanguage: unknown }).replyLanguage === "string"
+          ? (data as { replyLanguage: string }).replyLanguage
+          : null;
+
+      if (!reply || !animation || !replyLanguage) {
+        throw new Error(
+          "Resposta JSON incompleta (reply, animation ou replyLanguage)",
+        );
       }
 
       const animParsed = reactionAnimationSchema.safeParse(animation);
@@ -78,10 +93,13 @@ export function ChatAssistant() {
         throw new Error("Animação inválida na resposta do servidor");
       }
 
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply, replyLanguage },
+      ]);
       setReactionAnimation(animParsed.data);
       setReactionSeq((n) => n + 1);
-      speak(reply);
+      speak(reply, replyLanguage);
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : "Algo deu errado. Tente de novo.";

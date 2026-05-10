@@ -1,12 +1,14 @@
 "use client";
 
-export type ChatLine = { role: "user" | "assistant"; content: string };
+export type ChatLine =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string; replyLanguage: string };
 
 type ChatThreadProps = {
   messages: ChatLine[];
   voiceSupported: boolean;
   voiceEnabled: boolean;
-  onSpeakAssistant?: (text: string) => void;
+  onSpeakAssistant?: (text: string, replyLanguage: string) => void;
 };
 
 export function ChatThread({
@@ -48,7 +50,9 @@ export function ChatThread({
               {showVoice && m.role === "assistant" ? (
                 <button
                   type="button"
-                  onClick={() => onSpeakAssistant(m.content)}
+                  onClick={() =>
+                    onSpeakAssistant(m.content, m.replyLanguage)
+                  }
                   className="shrink-0 rounded-md p-1 text-amber-800/80 transition hover:bg-amber-200/50 hover:text-amber-950 dark:text-amber-200/80 dark:hover:bg-amber-900/40 dark:hover:text-amber-50"
                   title="Ouvir de novo"
                   aria-label="Ouvir a resposta da Sunny em voz alta"
