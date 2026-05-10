@@ -11,6 +11,8 @@ type ChatThreadProps = {
   voiceSupported: boolean;
   voiceEnabled: boolean;
   onSpeakAssistant?: (text: string, replyLanguage: string) => void;
+  /** Altura reservada ao dock fixo — quando muda, volta a alinhar ao fim do histórico. */
+  dockInsetPx?: number;
 };
 
 export function ChatThread({
@@ -18,18 +20,28 @@ export function ChatThread({
   voiceSupported,
   voiceEnabled,
   onSpeakAssistant,
+  dockInsetPx = 0,
 }: ChatThreadProps) {
-  const scrollAnchorRef = useRef<HTMLDivElement>(null);
+  const scrollRootRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     if (messages.length === 0) return;
-    scrollAnchorRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [messages]);
+    const root = scrollRootRef.current;
+    if (!root) return;
+    const goEnd = () => {
+      root.scrollTop = root.scrollHeight;
+    };
+    goEnd();
+    requestAnimationFrame(() => {
+      goEnd();
+      requestAnimationFrame(goEnd);
+    });
+  }, [messages, dockInsetPx]);
 
   if (messages.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-16 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400">
-        <p className="max-w-sm text-sm leading-relaxed">
+      <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/25 bg-white/5 px-6 py-14 text-center backdrop-blur-md">
+        <p className="max-w-sm text-sm leading-relaxed text-white/75">
           Diga oi — a Sunny responde aqui quando você enviar uma mensagem.
         </p>
       </div>
@@ -39,7 +51,11 @@ export function ChatThread({
   const showVoice = voiceSupported && voiceEnabled && onSpeakAssistant;
 
   return (
-    <div className="flex max-h-[min(70vh,520px)] flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+    <div
+      ref={scrollRootRef}
+      className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overflow-x-hidden pr-1"
+      style={{ scrollPaddingBottom: 12 }}
+    >
       {messages.map((m, i) => (
         <div
           key={`${m.role}-${i}`}
@@ -48,12 +64,12 @@ export function ChatThread({
           <div
             className={
               m.role === "user"
-                ? "max-w-[85%] rounded-2xl rounded-br-md bg-zinc-900 px-4 py-2.5 text-sm leading-relaxed text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "max-w-[85%] rounded-2xl rounded-bl-md border border-amber-200/90 bg-amber-50/90 px-4 py-2.5 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/35 dark:text-amber-50"
+                ? "max-w-[88%] rounded-2xl rounded-br-md border border-white/20 bg-black/35 px-4 py-2.5 text-sm leading-relaxed text-white shadow-lg backdrop-blur-md"
+                : "max-w-[88%] rounded-2xl rounded-bl-md border border-white/25 bg-white/15 px-4 py-2.5 text-sm leading-relaxed text-white shadow-lg backdrop-blur-md"
             }
           >
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="block text-[10px] font-semibold uppercase tracking-wider opacity-60">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 {m.role === "user" ? "Você" : "Sunny"}
               </span>
               {showVoice && m.role === "assistant" ? (
@@ -62,7 +78,7 @@ export function ChatThread({
                   onClick={() =>
                     onSpeakAssistant(m.content, m.replyLanguage)
                   }
-                  className="shrink-0 rounded-md p-1 text-amber-800/80 transition hover:bg-amber-200/50 hover:text-amber-950 dark:text-amber-200/80 dark:hover:bg-amber-900/40 dark:hover:text-amber-50"
+                  className="shrink-0 rounded-md p-1 text-amber-200/95 transition hover:bg-white/15 hover:text-white"
                   title="Ouvir de novo"
                   aria-label="Ouvir a resposta da Sunny em voz alta"
                 >
@@ -79,11 +95,10 @@ export function ChatThread({
                 </button>
               ) : null}
             </div>
-            <p className="whitespace-pre-wrap">{m.content}</p>
+            <p className="whitespace-pre-wrap text-white/95">{m.content}</p>
           </div>
         </div>
       ))}
-      <div ref={scrollAnchorRef} className="h-px shrink-0" aria-hidden />
     </div>
   );
 }

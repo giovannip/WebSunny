@@ -53,11 +53,14 @@ type CharacterPanelProps = {
   /** Incrementa a cada resposta do assistente com animação válida. */
   reactionSeq: number;
   reactionAnimation: ReactionAnimationId | null;
+  /** Tamanho visual do Lottie no dock (mantém proporção quadrada). */
+  avatarSizePx?: number;
 };
 
 export function CharacterPanel({
   reactionSeq,
   reactionAnimation,
+  avatarSizePx = 168,
 }: CharacterPanelProps) {
   const [libReady, setLibReady] = useState(false);
   const [playerKey, setPlayerKey] = useState(0);
@@ -171,15 +174,16 @@ export function CharacterPanel({
     };
   }, [libReady, phase, playerKey, goIdle, reactionSeq]);
 
+  const side = `min(${avatarSizePx}px, min(36vw, 30vh, calc(100vw - 4rem)))`;
+
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-[min(100vw-2rem,280px)] justify-end sm:bottom-6 sm:right-6"
-      style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+      className="pointer-events-none flex w-full shrink-0 justify-center px-1"
       role="img"
       aria-label="Personagem Sunny — animação Lottie"
     >
-      <div className="flex shrink-0 flex-col items-center overflow-hidden rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 shadow-md dark:border-amber-900/40 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-rose-950/30">
-        <div className="flex justify-center overflow-hidden rounded-xl bg-white/40 p-2 dark:bg-zinc-900/30">
+      <div className="flex w-full max-w-lg shrink-0 flex-col items-center overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/10">
+        <div className="flex w-full justify-center overflow-hidden rounded-xl bg-gradient-to-b from-white/10 to-white/5 px-3 py-2">
           {libReady ? (
             <dotlottie-player
               key={playerKey}
@@ -190,14 +194,18 @@ export function CharacterPanel({
               loop={displayLoop ? "true" : "false"}
               autoplay={true}
               style={{
-                width: "min(240px, calc(100vw - 3rem))",
-                height: "min(240px, calc(100vw - 3rem))",
+                width: side,
+                height: side,
                 maxWidth: "100%",
               }}
             />
           ) : (
             <div
-              className="flex h-[200px] w-[200px] items-center justify-center text-xs text-amber-900/55 dark:text-amber-200/55"
+              className="flex items-center justify-center text-xs text-white/55"
+              style={{
+                width: side,
+                height: side,
+              }}
               aria-hidden
             >
               Carregando…

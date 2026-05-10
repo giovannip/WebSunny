@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 
 import { CharacterPanel } from "@/components/CharacterPanel";
 import { ChatThread, type ChatLine } from "@/components/ChatThread";
@@ -21,6 +28,9 @@ export function ChatAssistant() {
   const [voiceConversationActive, setVoiceConversationActive] = useState(false);
   const voiceConversationActiveRef = useRef(false);
   const restartListeningRef = useRef<() => void>(() => {});
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+  const bottomDockRef = useRef<HTMLDivElement>(null);
+  const [bottomDockHeight, setBottomDockHeight] = useState(400);
   const [sttLang, setSttLang] = useState(() => {
     if (typeof window === "undefined") return "auto";
     try {
@@ -48,6 +58,41 @@ export function ChatAssistant() {
   useEffect(() => {
     voiceConversationActiveRef.current = voiceConversationActive;
   }, [voiceConversationActive]);
+
+  useLayoutEffect(() => {
+    const el = bottomDockRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+
+    const measure = () => {
+      const h = el.getBoundingClientRect().height;
+      setBottomDockHeight(Math.ceil(h));
+    };
+
+    measure();
+    requestAnimationFrame(() => {
+      measure();
+      requestAnimationFrame(measure);
+    });
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+
+    const retryMs = [50, 150, 400, 800, 1600];
+    const retryIds = retryMs.map((ms) => window.setTimeout(measure, ms));
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+      retryIds.forEach(clearTimeout);
+    };
+  }, []);
+
+  /** Reserva espaço extra para não sobrepor mensagens (medição async / Lottie). */
+  const bottomDockInset = bottomDockHeight + 20;
 
   const submitChat = useCallback(
     async (rawUserText: string) => {
@@ -179,6 +224,9 @@ export function ChatAssistant() {
   const send = useCallback(async () => {
     const raw = await finalizeListeningText();
     await submitChat(raw);
+    queueMicrotask(() => {
+      chatInputRef.current?.focus();
+    });
   }, [finalizeListeningText, submitChat]);
 
   const handleMicClick = useCallback(async () => {
@@ -199,91 +247,137 @@ export function ChatAssistant() {
   };
 
   return (
-    <>
-      <CharacterPanel
-        reactionSeq={reactionSeq}
-        reactionAnimation={reactionAnimation}
-      />
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 pb-[max(11rem,env(safe-area-inset-bottom))] pt-6 md:gap-8 md:px-8 md:pb-[max(12rem,env(safe-area-inset-bottom))] md:pt-8">
-        <div className="flex min-h-0 flex-1 flex-col gap-4">
-          {voiceSupported ? (
-            <div className="flex items-center justify-end gap-2">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={voiceEnabled}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setVoiceEnabled(on);
-                    if (!on) cancelVoice();
-                  }}
-                  className="h-3.5 w-3.5 rounded border-zinc-300 text-amber-600 focus:ring-amber-500/30 dark:border-zinc-600"
-                />
-                Voz da Sunny (Web Speech)
-              </label>
-            </div>
-          ) : null}
-          <ChatThread
-            messages={messages}
-            voiceSupported={voiceSupported}
-            voiceEnabled={voiceEnabled}
-            onSpeakAssistant={voiceSupported ? speak : undefined}
-          />
+    <div className="relative flex min-h-[100dvh] flex-1 flex-col bg-gradient-to-br from-[#140822] via-[#231036] to-[#b45309] text-zinc-100">
+      <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
+        <div className="mx-auto flex w-full max-w-5xl items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-white">
+              Sunny
+            </h1>
+            <p className="text-xs text-white/60">
+              Assistente com voz e microfone no navegador
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden pb-2">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ChatThread
+              messages={messages}
+              voiceSupported={voiceSupported}
+              voiceEnabled={voiceEnabled}
+              onSpeakAssistant={voiceSupported ? speak : undefined}
+              dockInsetPx={bottomDockInset}
+            />
+          </div>
+
           {error ? (
             <p
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+              className="mt-2 shrink-0 rounded-xl border border-red-400/40 bg-red-950/50 px-3 py-2 text-sm text-red-100 backdrop-blur-md"
               role="alert"
             >
               {error}
             </p>
           ) : null}
-          <div className="flex flex-col gap-2">
-            {browserSupportsSpeechRecognition ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                {voiceConversationActive ? (
-                  <span className="w-full text-[11px] text-amber-800/90 dark:text-amber-200/80">
-                    Modo conversa: ao pausar a fala, a mensagem envia sozinha; o microfone volta em seguida.
+        </div>
+
+        {/* Espaço equivalente ao dock fixo — mais fiável que só padding no flex */}
+        <div
+          className="shrink-0"
+          style={{ height: bottomDockInset }}
+          aria-hidden
+        />
+      </div>
+
+      <div
+        ref={bottomDockRef}
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-white/15 bg-[#140822]/95 backdrop-blur-xl supports-[backdrop-filter]:bg-[#140822]/85"
+        style={{
+          paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+        }}
+      >
+        <div className="mx-auto w-full max-w-5xl space-y-3 px-4 pt-3">
+          <CharacterPanel
+            reactionSeq={reactionSeq}
+            reactionAnimation={reactionAnimation}
+            avatarSizePx={136}
+          />
+
+          <div className="space-y-3 rounded-2xl border border-white/20 bg-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.25)] backdrop-blur-xl supports-[backdrop-filter]:bg-white/10">
+            {(voiceSupported || browserSupportsSpeechRecognition) ? (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {voiceSupported ? (
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-white/85">
+                      <input
+                        type="checkbox"
+                        checked={voiceEnabled}
+                        onChange={(e) => {
+                          const on = e.target.checked;
+                          setVoiceEnabled(on);
+                          if (!on) cancelVoice();
+                        }}
+                        className="h-3.5 w-3.5 shrink-0 rounded border-white/35 bg-black/20 text-amber-500 focus:ring-amber-500/40"
+                      />
+                      Voz da Sunny (Web Speech)
+                    </label>
+                  ) : null}
+                  {browserSupportsSpeechRecognition ? (
+                    <>
+                      <label
+                        htmlFor="stt-lang"
+                        className="shrink-0 text-xs font-medium text-white/90"
+                      >
+                        Idioma do microfone
+                      </label>
+                      <select
+                        id="stt-lang"
+                        value={sttLang}
+                        onChange={(e) => setSttLang(e.target.value)}
+                        disabled={listening || loading}
+                        className="min-w-0 max-w-[min(100%,280px)] flex-1 rounded-xl border border-white/20 bg-black/25 px-2.5 py-1.5 text-xs text-white focus:border-amber-400/80 focus:outline-none focus:ring-2 focus:ring-amber-500/35 disabled:opacity-60 sm:flex-initial"
+                      >
+                        {STT_LANG_OPTIONS.map((o) => (
+                          <option
+                            key={o.value}
+                            value={o.value}
+                            className="bg-zinc-900 text-white"
+                          >
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  ) : null}
+                </div>
+                {voiceConversationActive && browserSupportsSpeechRecognition ? (
+                  <span className="text-[11px] text-amber-200/95">
+                    Modo conversa: ao pausar a fala, a mensagem envia sozinha; o
+                    microfone volta em seguida.
                   </span>
                 ) : null}
-                <label htmlFor="stt-lang" className="shrink-0 font-medium">
-                  Idioma do microfone
-                </label>
-                <select
-                  id="stt-lang"
-                  value={sttLang}
-                  onChange={(e) => setSttLang(e.target.value)}
-                  disabled={listening || loading}
-                  className="max-w-[min(100%,220px)] rounded-lg border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-950 dark:text-zinc-100"
-                >
-                  {STT_LANG_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <span
-                  className="min-w-0 text-[11px] leading-snug text-zinc-500 dark:text-zinc-500"
-                  title="O reconhecimento usa um idioma por vez. Automático segue o idioma do navegador."
-                >
-                  Se errar palavras, escolha o idioma em que você fala ou ajuste o idioma do sistema.
-                </span>
               </div>
             ) : null}
+
             {!isMicrophoneAvailable && browserSupportsSpeechRecognition ? (
               <p
-                className="text-xs text-amber-800 dark:text-amber-200/90"
+                className="text-xs text-amber-200/95"
                 role="status"
               >
                 Ative o acesso ao microfone para usar ditado por voz.
               </p>
             ) : null}
+
             <label htmlFor="chat-input" className="sr-only">
               Mensagem para a Sunny
             </label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <textarea
+                ref={chatInputRef}
                 id="chat-input"
-                rows={3}
+                rows={2}
                 value={displayValue}
                 onChange={(e) => handleTextChange(e.target.value)}
                 onKeyDown={onKeyDown}
@@ -292,59 +386,56 @@ export function ChatAssistant() {
                     ? "Ou fale pelo microfone — a pausa envia a mensagem. Você ainda pode digitar."
                     : "Escreva uma mensagem… (Enter envia, Shift+Enter quebra linha)"
                 }
-                disabled={loading}
-                className="min-w-0 flex-1 resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                aria-busy={loading}
+                className="min-h-[4.25rem] sm:min-h-[5rem] min-w-0 flex-1 resize-y rounded-xl border border-white/20 bg-black/25 px-4 py-3 text-sm text-white placeholder:text-white/45 focus:border-amber-400/80 focus:outline-none focus:ring-2 focus:ring-amber-500/35"
               />
-              {browserSupportsSpeechRecognition ? (
+              <div className="flex shrink-0 items-center justify-end gap-2 sm:flex-col sm:items-stretch">
+                {browserSupportsSpeechRecognition ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleMicClick()}
+                    disabled={loading}
+                    aria-pressed={listening || voiceConversationActive}
+                    aria-label={
+                      listeningSessionActive || listening
+                        ? "Parar modo conversa por voz"
+                        : "Iniciar modo conversa por voz"
+                    }
+                    title={
+                      listeningSessionActive || listening
+                        ? "Parar microfone"
+                        : "Conversa por voz (pausa envia)"
+                    }
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-white transition sm:h-14 sm:w-full ${
+                      listening || voiceConversationActive
+                        ? "border-red-400/60 bg-red-950/50 hover:bg-red-950/70"
+                        : "border-white/25 bg-white/10 hover:bg-white/15"
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      className="h-6 w-6"
+                      aria-hidden
+                    >
+                      <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5.728-3a7.002 7.002 0 0 1-6 6.93V21h-1.5v-3.07a7.002 7.002 0 0 1-6-6.93h1.5a5.5 5.5 0 0 0 11 0h1.5Z" />
+                    </svg>
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  onClick={() => void handleMicClick()}
-                  disabled={loading}
-                  aria-pressed={listening || voiceConversationActive}
-                  aria-label={
-                    listeningSessionActive || listening
-                      ? "Parar modo conversa por voz"
-                      : "Iniciar modo conversa por voz"
-                  }
-                  title={
-                    listeningSessionActive || listening
-                      ? "Parar microfone"
-                      : "Conversa por voz (pausa envia)"
-                  }
-                  className={`flex shrink-0 flex-col items-center justify-center gap-0.5 self-stretch rounded-xl border px-3 py-2 text-xs font-medium transition md:px-4 ${
-                    listening || voiceConversationActive
-                      ? "border-red-400 bg-red-50 text-red-800 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-100 dark:hover:bg-red-950/70"
-                      : "border-zinc-300 bg-zinc-50 text-zinc-800 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                  onClick={() => void send()}
+                  disabled={loading || !displayValue.trim()}
+                  className="h-12 min-w-[7rem] shrink-0 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-6 text-sm font-semibold text-white shadow-lg transition hover:from-amber-400 hover:to-orange-500 disabled:cursor-not-allowed disabled:opacity-50 sm:h-14 sm:w-full"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="h-6 w-6"
-                    aria-hidden
-                  >
-                    <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5.728-3a7.002 7.002 0 0 1-6 6.93V21h-1.5v-3.07a7.002 7.002 0 0 1-6-6.93h1.5a5.5 5.5 0 0 0 11 0h1.5Z" />
-                  </svg>
-                  <span className="hidden sm:inline">
-                    {listening ? "A ouvir…" : "Conversa"}
-                  </span>
+                  {loading ? "Pensando…" : "Enviar"}
                 </button>
-              ) : null}
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={loading || !displayValue.trim()}
-                className="rounded-full bg-amber-600 px-6 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-amber-500 dark:hover:bg-amber-600"
-              >
-                {loading ? "Pensando…" : "Enviar"}
-              </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
