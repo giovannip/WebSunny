@@ -1,5 +1,7 @@
 "use client";
 
+import { useLayoutEffect, useRef } from "react";
+
 export type ChatLine =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; replyLanguage: string };
@@ -17,6 +19,13 @@ export function ChatThread({
   voiceEnabled,
   onSpeakAssistant,
 }: ChatThreadProps) {
+  const scrollAnchorRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (messages.length === 0) return;
+    scrollAnchorRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+  }, [messages]);
+
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-16 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/30 dark:text-zinc-400">
@@ -74,6 +83,7 @@ export function ChatThread({
           </div>
         </div>
       ))}
+      <div ref={scrollAnchorRef} className="h-px shrink-0" aria-hidden />
     </div>
   );
 }
